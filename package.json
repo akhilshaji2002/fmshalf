@@ -1,0 +1,12 @@
+{
+    "name": "fms-root",
+    "version": "1.0.0",
+    "description": "Fitness Management System - Root",
+    "scripts": {
+        "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+        "start": "concurrently \"npm start --prefix server\" \"npm run build --prefix client\""
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "name": "Test Coach API",
+    "email": "api_coach@test.com",
+    "password": "password123",
+    "role": "trainer",
+    "profilePic": "https://api.dicebear.com/7.x/avataaars/svg?seed=test",
+    "nationalId": {
+        "idType": "aadhar",
+        "idNumber": "9999-8888-7777"
+    },
+    "experience": "10",
+    "specializations": [
+        "Bodybuilding",
+        "Cardio"
+    ],
+    "bio": "Top tier coach for testing."
+}
