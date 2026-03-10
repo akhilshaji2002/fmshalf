@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
+import { API_ORIGIN } from '../config/network';
 
-const API = 'http://localhost:5000';
+const API = API_ORIGIN;
 
 const ROLE_LABELS = { admin: 'Admin', trainer: 'Coach', member: 'Member', gymOwner: 'Gym Owner' };
 const ROLE_COLORS = {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Upload, X, Image as ImageIcon, Trash2, Eye } from 'lucide-react';
+import { API_ORIGIN } from '../config/network';
 
 export default function ProgressAI() {
     const [file, setFile] = useState(null);
@@ -122,7 +123,7 @@ export default function ProgressAI() {
 
     const [history, setHistory] = useState([]);
     const resolveImageSrc = (url) => (
-        url?.startsWith('data:') || url?.startsWith('http') ? url : `http://localhost:5000${url}`
+        url?.startsWith('data:') || url?.startsWith('http') ? url : `${API_ORIGIN}${url}`
     );
 
     // Fetch history on mount

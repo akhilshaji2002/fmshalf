@@ -19,6 +19,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Middleware
 app.use(cors());
@@ -38,6 +39,9 @@ app.get('/', (req, res) => {
 const startServer = async () => {
   try {
     let mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+      throw new Error('MONGODB_URI is required');
+    }
 
     // Try connecting to provided URI first
     try {
@@ -45,6 +49,9 @@ const startServer = async () => {
       await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 2000 });
       console.log('✅ Connected to Local MongoDB');
     } catch (err) {
+      if (isProduction) {
+        throw err;
+      }
       console.warn('⚠️ Local MongoDB Failed. Starting Embedded Database...');
       // Fallback to Embedded Memory Server
       const mongod = await MongoMemoryServer.create();

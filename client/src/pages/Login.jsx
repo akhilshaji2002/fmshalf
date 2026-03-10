@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dumbbell, ArrowRight, AlertTriangle, Star, Trophy, CheckCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { API_ORIGIN } from '../config/network';
 
 const Login = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -67,7 +68,7 @@ const Login = () => {
         } : formData;
 
         try {
-            const res = await fetch(`http://localhost:5000${endpoint}`, {
+            const res = await fetch(`${API_ORIGIN}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

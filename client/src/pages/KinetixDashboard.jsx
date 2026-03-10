@@ -3,8 +3,9 @@ import axios from 'axios';
 import DynamicScroller from '../components/kinetix/DynamicScroller';
 import ExerciseCard from '../components/kinetix/ExerciseCard';
 import { createExerciseSvgDataUrl, createFormDemoSvgDataUrl, resolveExerciseImage } from '../components/kinetix/exerciseImage';
+import { API_ORIGIN } from '../config/network';
 
-const API = 'http://localhost:5000';
+const API = API_ORIGIN;
 
 const TIERS = [
     { id: "Tier 1", label: "Sub-Juniors (<14)" },
