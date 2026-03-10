@@ -85,6 +85,7 @@ function App() {
             <Route path="your-gym" element={<YourGym />} />
             <Route path="chat" element={<ChatPlatform />} />
           </Route>
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>
     </>
