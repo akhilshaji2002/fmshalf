@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Zap, Brain, UserCheck, Lock, Trophy, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSafeUser } from '../utils/auth';
+import DietChart from '../components/DietChart';
 
 const Training = () => {
     const [members, setMembers] = useState([]);
     const [selectedMember, setSelectedMember] = useState('');
     const [formData, setFormData] = useState({
-        weight: 70, height: 175, age: 25, gender: 'male', activityLevel: 'moderate'
+        weight: 70, height: 175, age: 25, gender: 'male', activityLevel: 'moderate',
+        goals: 'Maintain',
+        dietType: 'balanced',
+        foodAllergies: [],
+        healthConditions: []
     });
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -52,7 +57,7 @@ const Training = () => {
                         });
                     }
                 })
-                .catch(err => console.log("No existing plan found"))
+                .catch(() => console.log("No existing plan found"))
                 .finally(() => setLoading(false));
         }
     }, []);
@@ -63,7 +68,7 @@ const Training = () => {
         if (memberId) {
             const member = members.find(m => m._id === memberId);
             if (member && member.metrics && member.metrics.weight) {
-                setFormData({ ...formData, ...member.metrics });
+                setFormData(prev => ({ ...prev, ...member.metrics, goals: prev.goals || 'Maintain' }));
             }
         }
     };
@@ -72,7 +77,52 @@ const Training = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handleHealthConditionChange = (condition) => {
+        if (condition === 'None') {
+            setFormData(prev => ({ ...prev, healthConditions: [] }));
+            return;
+        }
+        setFormData(prev => {
+            const current = prev.healthConditions || [];
+            if (current.includes(condition)) {
+                return { ...prev, healthConditions: current.filter(c => c !== condition) };
+            } else {
+                return { ...prev, healthConditions: [...current.filter(c => c !== 'None'), condition] };
+            }
+        });
+    };
+
+    const handleAllergyChange = (allergy) => {
+        if (allergy === 'None') {
+            setFormData(prev => ({ ...prev, foodAllergies: [] }));
+            return;
+        }
+        setFormData(prev => {
+            const current = prev.foodAllergies || [];
+            if (current.includes(allergy)) {
+                return { ...prev, foodAllergies: current.filter(c => c !== allergy) };
+            }
+            return { ...prev, foodAllergies: [...current.filter(c => c !== 'None'), allergy] };
+        });
+    };
+
+    const validateForm = () => {
+        const weight = Number(formData.weight);
+        const height = Number(formData.height);
+        const age = Number(formData.age);
+        if (Number.isNaN(weight) || weight < 25 || weight > 350) return "Weight should be between 25 and 350 kg.";
+        if (Number.isNaN(height) || height < 120 || height > 240) return "Height should be between 120 and 240 cm.";
+        if (Number.isNaN(age) || age < 12 || age > 100) return "Age should be between 12 and 100.";
+        if (isStaff && !selectedMember) return "Select a member to save a plan.";
+        return null;
+    };
+
     const calculate = async () => {
+        const validationError = validateForm();
+        if (validationError) {
+            toast.error(validationError);
+            return;
+        }
         setLoading(true);
         const userStr = localStorage.getItem('userInfo');
         const token = userStr ? JSON.parse(userStr).token : null;
@@ -92,9 +142,14 @@ const Training = () => {
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data?.message || "Unable to generate plan.");
+            }
             setResults(data);
+            toast.success("Plan Updated Successfully!");
         } catch (err) {
             console.error(err);
+            toast.error(err.message || "Failed to generate plan.");
         } finally {
             setLoading(false);
         }
@@ -197,6 +252,63 @@ const Training = () => {
                             </select>
                         </div>
 
+                        <div>
+                            <label className="text-gray-400 text-sm mb-2 block">Goal</label>
+                            <select name="goals" value={formData.goals} onChange={handleChange}
+                                className="w-full bg-surface border border-white/5 rounded-lg p-3 text-white focus:border-primary focus:outline-none">
+                                <option value="Maintain">Maintain</option>
+                                <option value="Weight Loss">Weight Loss</option>
+                                <option value="Muscle Gain">Muscle Gain</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-gray-400 text-sm mb-2 block">Diet Type</label>
+                            <select name="dietType" value={formData.dietType} onChange={handleChange}
+                                className="w-full bg-surface border border-white/5 rounded-lg p-3 text-white focus:border-primary focus:outline-none">
+                                <option value="balanced">Balanced</option>
+                                <option value="vegetarian">Vegetarian</option>
+                                <option value="vegan">Vegan</option>
+                                <option value="high_protein">High Protein</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-gray-400 text-sm mb-2 block">Medical Conditions (Select all that apply)</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['Diabetic', 'High Cholesterol', 'Hypertension', 'Thyroid', 'PCOS/PCOD', 'None'].map(cond => (
+                                    <button
+                                        key={cond}
+                                        onClick={() => handleHealthConditionChange(cond)}
+                                        className={`p-2 rounded-lg text-xs font-bold border transition-all ${(formData.healthConditions || []).includes(cond) || (cond === 'None' && (formData.healthConditions || []).length === 0)
+                                            ? 'bg-primary text-black border-primary'
+                                            : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        {cond}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-gray-400 text-sm mb-2 block">Food Allergies / Intolerances</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['Milk/Dairy', 'Shrimp/Shellfish', 'Fish', 'Egg', 'Peanut', 'Tree Nuts', 'Soy', 'Gluten', 'None'].map(allergy => (
+                                    <button
+                                        key={allergy}
+                                        onClick={() => handleAllergyChange(allergy)}
+                                        className={`p-2 rounded-lg text-xs font-bold border transition-all ${(formData.foodAllergies || []).includes(allergy) || (allergy === 'None' && (formData.foodAllergies || []).length === 0)
+                                            ? 'bg-primary text-black border-primary'
+                                            : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        {allergy}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         <button onClick={calculate} disabled={loading}
                             className="w-full py-4 bg-gradient-to-r from-primary to-primary/80 text-black font-bold rounded-xl flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
                             {loading ? <Zap className="animate-spin" /> : <Brain />}
@@ -265,6 +377,13 @@ const Training = () => {
                     )}
                 </div>
             </div>
+
+            {/* Diet Chart Section */}
+            {results && results.dietPlan && (
+                <div className="pt-8 border-t border-white/5">
+                    <DietChart dietPlan={results.dietPlan} tdee={results.tdee} />
+                </div>
+            )}
 
             {/* Pending Testimonials Section for Trainers */}
             {user?.role === 'trainer' && pendingTestimonials.length > 0 && (

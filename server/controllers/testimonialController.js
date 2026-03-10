@@ -6,19 +6,31 @@ const User = require('../models/User');
 // @access  Private (Member)
 const submitTestimonial = async (req, res) => {
     try {
-        const { coachId, content, transformationImage, achievement } = req.body;
+        const { coachId, content, transformationImage, beforeImage, afterImage, achievement, coachRating, gymRating, coachReview, gymReview } = req.body;
 
         const coach = await User.findById(coachId);
         if (!coach || coach.role !== 'trainer') {
             return res.status(404).json({ message: 'Trainer not found' });
         }
+        const bImg = beforeImage || transformationImage;
+        const aImg = afterImage || transformationImage;
+        if (!bImg || !aImg) {
+            return res.status(400).json({ message: 'Before and after images are required' });
+        }
 
         const testimonial = await Testimonial.create({
             member: req.user._id,
             coach: coachId,
+            gym: req.user.currentGym || null,
             content,
-            transformationImage,
-            achievement
+            transformationImage: aImg,
+            beforeImage: bImg,
+            afterImage: aImg,
+            achievement,
+            coachRating: Number(coachRating || 5),
+            gymRating: Number(gymRating || 5),
+            coachReview: coachReview || '',
+            gymReview: gymReview || ''
         });
 
         res.status(201).json(testimonial);
@@ -77,7 +89,9 @@ const getCoachTestimonials = async (req, res) => {
         const testimonials = await Testimonial.find({
             coach: req.params.coachId,
             status: 'approved'
-        }).populate('member', 'name profilePic');
+        })
+            .populate('member', 'name profilePic')
+            .populate('gym', 'name');
 
         res.json(testimonials);
     } catch (error) {
@@ -144,9 +158,91 @@ const getAllTestimonials = async (req, res) => {
 
         const testimonials = await Testimonial.find()
             .populate('member', 'name email')
-            .populate('coach', 'name');
+            .populate('coach', 'name')
+            .populate('gym', 'name');
 
         res.json(testimonials);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc Public approved stories for all roles
+const getPublicStories = async (req, res) => {
+    try {
+        const stories = await Testimonial.find({ status: 'approved' })
+            .populate('member', 'name profilePic')
+            .populate('coach', 'name')
+            .populate('gym', 'name')
+            .sort({ createdAt: -1 })
+            .limit(30);
+        res.json(stories);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc Logged-in user's testimonials (any status)
+const getMyTestimonials = async (req, res) => {
+    try {
+        const stories = await Testimonial.find({ member: req.user._id })
+            .populate('member', 'name profilePic')
+            .populate('coach', 'name')
+            .populate('gym', 'name')
+            .sort({ createdAt: -1 })
+            .limit(30);
+        res.json(stories);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc Rating summary for a coach
+const getCoachReviewSummary = async (req, res) => {
+    try {
+        const coachId = req.params.coachId;
+        const rows = await Testimonial.find({ coach: coachId, status: 'approved' })
+            .select('coachRating coachReview member')
+            .populate('member', 'name profilePic')
+            .sort({ createdAt: -1 })
+            .limit(10);
+        if (!rows.length) {
+            return res.json({ average: 0, count: 0, reviews: [] });
+        }
+        const avg = rows.reduce((s, r) => s + Number(r.coachRating || 0), 0) / rows.length;
+        res.json({
+            average: Number(avg.toFixed(2)),
+            count: rows.length,
+            reviews: rows
+                .filter((r) => r.coachReview)
+                .map((r) => ({ rating: r.coachRating, review: r.coachReview, member: r.member }))
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc Rating summary for a gym
+const getGymReviewSummary = async (req, res) => {
+    try {
+        const gymId = req.params.gymId;
+        const rows = await Testimonial.find({ gym: gymId, status: 'approved' })
+            .select('gymRating gymReview member coach')
+            .populate('member', 'name profilePic')
+            .populate('coach', 'name')
+            .sort({ createdAt: -1 })
+            .limit(20);
+        if (!rows.length) {
+            return res.json({ average: 0, count: 0, reviews: [] });
+        }
+        const avg = rows.reduce((s, r) => s + Number(r.gymRating || 0), 0) / rows.length;
+        res.json({
+            average: Number(avg.toFixed(2)),
+            count: rows.length,
+            reviews: rows
+                .filter((r) => r.gymReview)
+                .map((r) => ({ rating: r.gymRating, review: r.gymReview, member: r.member, coach: r.coach }))
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -159,5 +255,9 @@ module.exports = {
     getCoachTestimonials,
     adminUpdateTestimonial,
     deleteTestimonial,
-    getAllTestimonials
+    getAllTestimonials,
+    getPublicStories,
+    getMyTestimonials,
+    getCoachReviewSummary,
+    getGymReviewSummary
 };

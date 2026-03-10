@@ -7,7 +7,7 @@ const ManageTestimonials = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState(null);
-    const [editForm, setEditForm] = useState({ content: '', achievement: '', status: '' });
+    const [editForm, setEditForm] = useState({ content: '', achievement: '', status: '', beforeImage: '', afterImage: '', coachRating: 5, gymRating: 5, coachReview: '', gymReview: '' });
 
     const fetchAll = async () => {
         const userStr = localStorage.getItem('userInfo');
@@ -100,10 +100,10 @@ const ManageTestimonials = () => {
                 {filtered.map(t => (
                     <div key={t._id} className="glass-card p-6 flex flex-col lg:flex-row gap-8 items-start hover:border-white/20 transition-all group">
                         {/* Image Preview */}
-                        <div className="w-full lg:w-48 h-48 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0 relative">
-                            <img src={t.transformationImage} alt="Transformation" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-                            <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                        <div className="w-full lg:w-56 h-48 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0 relative grid grid-cols-2">
+                            <img src={t.beforeImage || t.transformationImage} alt="Before" className="w-full h-full object-cover" />
+                            <img src={t.afterImage || t.transformationImage} alt="After" className="w-full h-full object-cover" />
+                            <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/60 px-2 py-1 rounded">
                                 <span className={`w-2 h-2 rounded-full ${t.status === 'approved' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : t.status === 'pending' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`} />
                                 <span className="text-[10px] font-black uppercase text-white tracking-widest">{t.status}</span>
                             </div>
@@ -122,6 +122,10 @@ const ManageTestimonials = () => {
                                     <span className="text-primary font-bold">{t.coach?.name || 'Unknown'}</span>
                                 </div>
                                 <div className="flex flex-col border-l border-white/10 pl-6">
+                                    <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Gym</span>
+                                    <span className="text-primary font-bold">{t.gym?.name || 'N/A'}</span>
+                                </div>
+                                <div className="flex flex-col border-l border-white/10 pl-6">
                                     <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Achievement</span>
                                     <span className="bg-white/10 px-3 py-1 rounded text-xs font-black text-white italic">"{t.achievement}"</span>
                                 </div>
@@ -130,6 +134,9 @@ const ManageTestimonials = () => {
                             <p className="text-gray-400 text-sm italic leading-relaxed border-l-2 border-primary/20 pl-4">
                                 "{t.content}"
                             </p>
+                            <p className="text-xs text-yellow-400">Coach ★ {t.coachRating || 0} • Gym ★ {t.gymRating || 0}</p>
+                            <p className="text-xs text-gray-400">Coach Review: {t.coachReview || '—'}</p>
+                            <p className="text-xs text-gray-400">Gym Review: {t.gymReview || '—'}</p>
 
                             <div className="text-[10px] text-gray-600 flex items-center gap-2">
                                 <Info size={12} /> ID: {t._id} • CREATED: {new Date(t.createdAt).toLocaleDateString()}
@@ -137,11 +144,45 @@ const ManageTestimonials = () => {
                         </div>
 
                         {/* Actions */}
-                        <div className="w-full lg:w-auto flex lg:flex-col gap-2 mt-4 lg:mt-0">
+                            <div className="w-full lg:w-auto flex lg:flex-col gap-2 mt-4 lg:mt-0">
+                            <button
+                                onClick={async () => {
+                                    const userStr = localStorage.getItem('userInfo');
+                                    const token = userStr ? JSON.parse(userStr)?.token : null;
+                                    const nextStatus = t.status === 'hidden' ? 'approved' : 'hidden';
+                                    const res = await fetch(`http://localhost:5000/api/testimonials/${t._id}`, {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            Authorization: `Bearer ${token}`
+                                        },
+                                        body: JSON.stringify({ status: nextStatus })
+                                    });
+                                    if (res.ok) {
+                                        toast.success(nextStatus === 'hidden' ? 'Story hidden from public feed' : 'Story visible in public feed');
+                                        fetchAll();
+                                    } else {
+                                        toast.error('Failed to update visibility');
+                                    }
+                                }}
+                                className="flex-1 lg:w-32 py-3 bg-amber-500/10 text-amber-400 rounded-xl hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center gap-2 text-xs font-bold"
+                            >
+                                <Info size={14} /> {t.status === 'hidden' ? 'UNHIDE' : 'HIDE'}
+                            </button>
                             <button
                                 onClick={() => {
                                     setEditingItem(t);
-                                    setEditForm({ content: t.content, achievement: t.achievement, status: t.status });
+                                    setEditForm({
+                                        content: t.content,
+                                        achievement: t.achievement,
+                                        status: t.status,
+                                        beforeImage: t.beforeImage || '',
+                                        afterImage: t.afterImage || '',
+                                        coachRating: t.coachRating || 5,
+                                        gymRating: t.gymRating || 5,
+                                        coachReview: t.coachReview || '',
+                                        gymReview: t.gymReview || ''
+                                    });
                                 }}
                                 className="flex-1 lg:w-32 py-3 bg-white/5 text-white rounded-xl hover:bg-white/10 transition-all flex items-center justify-center gap-2 text-xs font-bold"
                             >
@@ -194,19 +235,34 @@ const ManageTestimonials = () => {
                                     required
                                 />
                             </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-white text-xs font-black uppercase mb-2 block tracking-widest">Before Image</label>
+                                    <input className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none"
+                                        value={editForm.beforeImage}
+                                        onChange={e => setEditForm({ ...editForm, beforeImage: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="text-white text-xs font-black uppercase mb-2 block tracking-widest">After Image</label>
+                                    <input className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none"
+                                        value={editForm.afterImage}
+                                        onChange={e => setEditForm({ ...editForm, afterImage: e.target.value })} />
+                                </div>
+                            </div>
 
                             <div>
                                 <label className="text-white text-xs font-black uppercase mb-2 block tracking-widest">Visibility Status</label>
                                 <div className="grid grid-cols-3 gap-3">
-                                    {['pending', 'approved', 'rejected'].map(s => (
+                                    {['pending', 'approved', 'hidden', 'rejected'].map(s => (
                                         <button
                                             key={s}
                                             type="button"
                                             onClick={() => setEditForm({ ...editForm, status: s })}
-                                            className={`py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all ${editForm.status === s ? (s === 'approved' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : s === 'pending' ? 'bg-amber-500/20 border-amber-500 text-amber-500' : 'bg-red-500/20 border-red-500 text-red-500') : 'bg-black/50 border-white/5 text-gray-500 hover:border-white/20'}`}
+                                            className={`py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all ${editForm.status === s ? (s === 'approved' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : s === 'pending' ? 'bg-amber-500/20 border-amber-500 text-amber-500' : s === 'hidden' ? 'bg-orange-500/20 border-orange-500 text-orange-500' : 'bg-red-500/20 border-red-500 text-red-500') : 'bg-black/50 border-white/5 text-gray-500 hover:border-white/20'}`}
                                         >
                                             {s === 'approved' && <Check size={12} className="inline mr-1" />}
                                             {s === 'rejected' && <X size={12} className="inline mr-1" />}
+                                            {s === 'hidden' && <Info size={12} className="inline mr-1" />}
                                             {s}
                                         </button>
                                     ))}

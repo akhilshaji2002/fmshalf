@@ -11,11 +11,27 @@ const testimonialSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    gym: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Gym'
+    },
     content: {
         type: String,
         required: true
     },
+    coachReview: { type: String, default: '' },
+    gymReview: { type: String, default: '' },
+    coachRating: { type: Number, min: 1, max: 5, default: 5 },
+    gymRating: { type: Number, min: 1, max: 5, default: 5 },
     transformationImage: {
+        type: String,
+        default: ''
+    },
+    beforeImage: {
+        type: String,
+        required: true
+    },
+    afterImage: {
         type: String,
         required: true
     },
@@ -25,7 +41,7 @@ const testimonialSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'approved', 'rejected'],
+        enum: ['pending', 'approved', 'rejected', 'hidden'],
         default: 'pending'
     },
     date: {

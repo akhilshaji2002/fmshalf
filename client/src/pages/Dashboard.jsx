@@ -4,15 +4,18 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { getSafeUser } from '../utils/auth';
 import MemberDashboard from './MemberDashboard';
 import ProgressAI from '../components/ProgressAI';
+import MemberProfileModal from '../components/MemberProfileModal';
 
-const StatCard = ({ icon: Icon, label, value, trend, color }) => (
+const StatCard = ({ icon, label, value, trend, color }) => {
+    const IconComponent = icon;
+    return (
     <div className="glass-card p-6 relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
         <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
-            <Icon size={100} />
+            <IconComponent size={100} />
         </div>
         <div className="flex justify-between items-start mb-4">
             <div className={`p-3 rounded-xl bg-white/5 ${color} text-white`}>
-                <Icon size={24} />
+                <IconComponent size={24} />
             </div>
             {trend && (
                 <span className="flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-lg">
@@ -25,7 +28,8 @@ const StatCard = ({ icon: Icon, label, value, trend, color }) => (
             <p className="text-3xl font-bold text-white mt-1">{value}</p>
         </div>
     </div>
-);
+    );
+};
 
 const LiveMonitor = ({ onClose, memberName }) => {
     const [data, setData] = useState([]);
@@ -99,6 +103,7 @@ const Dashboard = () => {
     const [wallet, setWallet] = useState({ balance: 0, totalEarnings: 0 });
     const [history, setHistory] = useState([]);
     const [dossierUserId, setDossierUserId] = useState(null);
+    const [publicStories, setPublicStories] = useState([]);
 
     useEffect(() => {
         const parsedUser = getSafeUser();
@@ -157,6 +162,11 @@ const Dashboard = () => {
                     setActiveMembers(online);
                 }
             })
+            .catch(err => console.error(err));
+
+        fetch('http://localhost:5000/api/testimonials/public')
+            .then(res => res.json())
+            .then(data => setPublicStories(Array.isArray(data) ? data : []))
             .catch(err => console.error(err));
     }, []);
 
@@ -280,6 +290,26 @@ const Dashboard = () => {
                     </div>
                 </div>
             )}
+
+            <div className="glass-card p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Community Success Stories</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {publicStories.slice(0, 6).map((s) => (
+                        <div key={s._id} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                            <div className="h-24 grid grid-cols-2">
+                                <img src={s.beforeImage} alt="before" className="w-full h-full object-cover" />
+                                <img src={s.afterImage} alt="after" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="p-3">
+                                <p className="text-white text-sm font-semibold">{s.member?.name || 'Member'}</p>
+                                <p className="text-gray-400 text-xs">{s.achievement}</p>
+                                <p className="text-yellow-400 text-[11px] mt-1">Coach ★ {s.coachRating || 0} • Gym ★ {s.gymRating || 0}</p>
+                            </div>
+                        </div>
+                    ))}
+                    {!publicStories.length && <p className="text-gray-500 text-sm">No stories available yet.</p>}
+                </div>
+            </div>
 
             {monitorMember && <LiveMonitor memberName={monitorMember} onClose={() => setMonitorMember(null)} />}
             <ProgressAI />

@@ -6,6 +6,8 @@ const transactionSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     description: { type: String },
     relatedUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Optional (e.g., member buying)
+    gym: { type: mongoose.Schema.Types.ObjectId, ref: 'Gym' },
+    booking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
     items: [
         {
             product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
@@ -13,6 +15,7 @@ const transactionSchema = new mongoose.Schema({
             priceAtSale: { type: Number }
         }
     ],
+    meta: { type: mongoose.Schema.Types.Mixed, default: {} },
     status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
     paymentMethod: { type: String, enum: ['upi', 'card', 'cash', 'none'], default: 'none' },
     transactionId: { type: String } // Gateway Reference

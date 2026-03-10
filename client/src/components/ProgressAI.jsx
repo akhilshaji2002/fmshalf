@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, Trash2, Eye } from 'lucide-react';
 
 export default function ProgressAI() {
     const [file, setFile] = useState(null);
@@ -14,6 +14,7 @@ export default function ProgressAI() {
     const [resultImg, setResultImg] = useState(null);
     const [loading, setLoading] = useState(false);
     const [isDemo, setIsDemo] = useState(false);
+    const [resultMessage, setResultMessage] = useState('');
     const inputRef = useRef(null);
 
     const handleChange = (e) => {
@@ -68,6 +69,7 @@ export default function ProgressAI() {
         if (!file) return alert('Please upload a photo');
         setLoading(true);
         setIsDemo(false);
+        setResultMessage('');
         setProgress(0);
 
         // Simulate progress bar
@@ -96,9 +98,9 @@ export default function ProgressAI() {
             setProgress(100);
 
             if (res.data.isDemo) {
-                // Silently handle demo mode
                 setIsDemo(true);
             }
+            setResultMessage(res.data.message || '');
 
             // Handle both URL paths (saved images) and Base64 (legacy/fallback)
             const imgData = res.data.image;
@@ -118,8 +120,10 @@ export default function ProgressAI() {
         setLoading(false);
     };
 
-    const [showModal, setShowModal] = useState(false);
     const [history, setHistory] = useState([]);
+    const resolveImageSrc = (url) => (
+        url?.startsWith('data:') || url?.startsWith('http') ? url : `http://localhost:5000${url}`
+    );
 
     // Fetch history on mount
     useEffect(() => {
@@ -141,13 +145,31 @@ export default function ProgressAI() {
         fetchHistory();
     }, []);
 
-    const downloadImage = (url, prompt) => {
+    const downloadImage = (url) => {
         const link = document.createElement('a');
-        link.href = url.startsWith('data:') ? url : `http://localhost:5000${url}`;
-        link.download = `fms-ai-${Date.now()}.jpg`;
+        link.href = resolveImageSrc(url);
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const extension = url.endsWith('.svg') ? 'svg' : 'jpg';
+        link.download = `fms-ai-${stamp}.${extension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const deleteImage = async (url) => {
+        if (!window.confirm('Delete this generated image?')) return;
+        try {
+            const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            const token = userInfo.token;
+            await axios.delete('/api/ai/progress', {
+                headers: { Authorization: `Bearer ${token}` },
+                data: { imageUrl: url }
+            });
+            setHistory((prev) => prev.filter((h) => h.imageUrl !== url));
+            if (resultImg === url) setResultImg(null);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to delete image');
+        }
     };
 
     return (
@@ -232,6 +254,16 @@ export default function ProgressAI() {
                             </button>
                         )}
                     </form>
+                    {isDemo && (
+                        <div className="mt-4 p-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-yellow-200 text-xs">
+                            AI image provider was unstable, so a fallback progress visual was generated to keep your flow uninterrupted.
+                        </div>
+                    )}
+                    {!isDemo && resultMessage ? (
+                        <div className="mt-4 p-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 text-xs">
+                            {resultMessage}
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Right: History Gallery */}
@@ -243,15 +275,31 @@ export default function ProgressAI() {
                         ) : (
                             history.map((item, idx) => (
                                 <div key={idx} className="bg-gray-800 rounded-lg p-3 hover:bg-gray-750 transition border border-gray-700">
-                                    <img src={item.imageUrl} alt="History" className="w-full h-48 object-cover rounded-md mb-3" />
+                                    <img src={resolveImageSrc(item.imageUrl)} alt="History" className="w-full h-48 object-cover rounded-md mb-3" />
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</span>
-                                        <button
-                                            onClick={() => downloadImage(item.imageUrl, item.prompt)}
-                                            className="text-xs bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded transition"
-                                        >
-                                            Download
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setResultImg(item.imageUrl)}
+                                                title="Preview"
+                                                className="p-1.5 rounded bg-gray-700 hover:bg-gray-600 transition"
+                                            >
+                                                <Eye size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => downloadImage(item.imageUrl)}
+                                                className="text-xs bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded transition"
+                                            >
+                                                Download
+                                            </button>
+                                            <button
+                                                onClick={() => deleteImage(item.imageUrl)}
+                                                title="Delete"
+                                                className="p-1.5 rounded bg-red-600/80 hover:bg-red-500 transition"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))
@@ -273,7 +321,7 @@ export default function ProgressAI() {
 
                         <div className="flex flex-col md:flex-row">
                             <div className="w-full md:w-2/3 bg-black flex items-center justify-center">
-                                <img src={resultImg} alt="Generated Result" className="max-h-[80vh] w-full object-contain" />
+                                <img src={resolveImageSrc(resultImg)} alt="Generated Result" className="max-h-[80vh] w-full object-contain" />
                             </div>
                             <div className="w-full md:w-1/3 p-6 flex flex-col justify-center space-y-6">
                                 <div>
@@ -283,7 +331,7 @@ export default function ProgressAI() {
 
                                 <div className="space-y-3">
                                     <button
-                                        onClick={() => downloadImage(resultImg, 'current-result')}
+                                        onClick={() => downloadImage(resultImg)}
                                         className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2"
                                     >
                                         <span>Download Image</span>
@@ -293,6 +341,12 @@ export default function ProgressAI() {
                                         className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-3 rounded-lg transition border border-gray-700"
                                     >
                                         Create Another
+                                    </button>
+                                    <button
+                                        onClick={() => deleteImage(resultImg)}
+                                        className="w-full bg-red-600/80 hover:bg-red-500 text-white font-medium py-3 rounded-lg transition border border-red-500/40 flex items-center justify-center gap-2"
+                                    >
+                                        <Trash2 size={16} /> Delete This Image
                                     </button>
                                 </div>
                             </div>

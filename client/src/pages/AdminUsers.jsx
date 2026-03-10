@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Users, Search, Shield, Key, Trash2, Calendar, Mail, Phone, UserCheck, ShieldAlert, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSafeUser } from '../utils/auth';
@@ -15,7 +15,7 @@ const AdminUsers = () => {
 
     const adminInfo = getSafeUser();
 
-    const fetchAllUsers = async () => {
+    const fetchAllUsers = useCallback(async () => {
         if (!adminInfo?.token) {
             setLoading(false);
             return;
@@ -31,11 +31,11 @@ const AdminUsers = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [adminInfo?.token]);
 
     useEffect(() => {
         fetchAllUsers();
-    }, []);
+    }, [fetchAllUsers]);
 
     const handleResetPassword = async () => {
         if (!newPass) return toast.error('Enter a new password');

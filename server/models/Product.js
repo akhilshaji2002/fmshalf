@@ -5,7 +5,8 @@ const productSchema = new mongoose.Schema({
     category: { type: String, enum: ['supplement', 'gear', 'drink', 'apparel', 'other'], required: true },
     price: { type: Number, required: true },
     stock: { type: Number, required: true, default: 0 },
-    sku: { type: String, unique: true },
+    // Optional SKU must be sparse to avoid duplicate-null unique index collisions.
+    sku: { type: String, unique: true, sparse: true },
     image: { type: String } // URL placeholder
 });
 

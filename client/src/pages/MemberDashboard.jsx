@@ -12,11 +12,17 @@ const MemberDashboard = ({ user }) => {
     const [bookingDate, setBookingDate] = useState('');
     const [trainingType, setTrainingType] = useState('gym');
     const [showTestimonialModal, setShowTestimonialModal] = useState(false);
+    const [publicStories, setPublicStories] = useState([]);
     const [testimonialData, setTestimonialData] = useState({
         coachId: '',
         content: '',
         achievement: '',
-        transformationImage: ''
+        beforeImage: '',
+        afterImage: '',
+        coachRating: 5,
+        gymRating: 5,
+        coachReview: '',
+        gymReview: ''
     });
 
     const heroImage = user?.metrics?.gender === 'female' ? '/assets/hero_female.png' : '/assets/hero_male.png';
@@ -38,6 +44,18 @@ const MemberDashboard = ({ user }) => {
         fetch('http://localhost:5000/api/bookings', { headers })
             .then(res => res.json())
             .then(data => setBookings(Array.isArray(data) ? data : []))
+            .catch(err => console.error(err));
+
+        // Public success stories
+        Promise.all([
+            fetch('http://localhost:5000/api/testimonials/public').then(res => res.json()).catch(() => []),
+            fetch('http://localhost:5000/api/testimonials/mine', { headers }).then(res => res.ok ? res.json() : []).catch(() => [])
+        ])
+            .then(([pub, mine]) => {
+                const combined = [...(Array.isArray(mine) ? mine : []), ...(Array.isArray(pub) ? pub : [])];
+                const unique = combined.filter((item, idx, arr) => arr.findIndex((x) => x._id === item._id) === idx);
+                setPublicStories(unique);
+            })
             .catch(err => console.error(err));
     }, []);
 
@@ -94,7 +112,7 @@ const MemberDashboard = ({ user }) => {
         e.preventDefault();
         const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
 
-        if (!testimonialData.coachId || !testimonialData.content || !testimonialData.achievement || !testimonialData.transformationImage) {
+        if (!testimonialData.coachId || !testimonialData.content || !testimonialData.achievement || !testimonialData.beforeImage || !testimonialData.afterImage) {
             toast.error('Please fill all fields');
             return;
         }
@@ -112,7 +130,30 @@ const MemberDashboard = ({ user }) => {
             if (res.ok) {
                 toast.success('Wait for coach approval!');
                 setShowTestimonialModal(false);
-                setTestimonialData({ coachId: '', content: '', achievement: '', transformationImage: '' });
+                setTestimonialData({
+                    coachId: '',
+                    content: '',
+                    achievement: '',
+                    beforeImage: '',
+                    afterImage: '',
+                    coachRating: 5,
+                    gymRating: 5,
+                    coachReview: '',
+                    gymReview: ''
+                });
+                // Immediately show user's newly submitted story in their feed
+                const userHeaders = { Authorization: `Bearer ${token}` };
+                const [pubRes, mineRes] = await Promise.all([
+                    fetch('http://localhost:5000/api/testimonials/public'),
+                    fetch('http://localhost:5000/api/testimonials/mine', { headers: userHeaders })
+                ]);
+                const [pubList, mineList] = await Promise.all([
+                    pubRes.ok ? pubRes.json() : [],
+                    mineRes.ok ? mineRes.json() : []
+                ]);
+                const merged = [...(Array.isArray(mineList) ? mineList : []), ...(Array.isArray(pubList) ? pubList : [])];
+                const unique = merged.filter((item, idx, arr) => arr.findIndex((x) => x._id === item._id) === idx);
+                setPublicStories(unique);
             } else {
                 const data = await res.json();
                 toast.error(data.message || 'Submission failed');
@@ -147,13 +188,13 @@ const MemberDashboard = ({ user }) => {
             {/* Testimonial Submission Modal */}
             {showTestimonialModal && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in zoom-in duration-300">
-                    <div className="bg-surface border border-white/10 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative">
-                        <div className="mb-6">
+                    <div className="bg-surface border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl relative max-h-[90vh] flex flex-col">
+                        <div className="p-8 pb-0 mb-4">
                             <h2 className="text-3xl font-black text-white italic tracking-tighter">SHARE YOUR <span className="text-primary">TRANSFORMATION</span></h2>
                             <p className="text-gray-400 text-sm">Inspire others with your journey. Your coach will review and feature it!</p>
                         </div>
 
-                        <form onSubmit={handleTestimonialSubmit} className="space-y-4">
+                        <form onSubmit={handleTestimonialSubmit} className="flex-1 overflow-y-auto px-8 pb-6 space-y-4">
                             <div>
                                 <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Select Your Coach</label>
                                 <select
@@ -193,21 +234,61 @@ const MemberDashboard = ({ user }) => {
                             </div>
 
                             <div>
-                                <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Transformation Photo URL</label>
-                                <input
-                                    type="text"
-                                    placeholder="Paste your transformation photo link"
+                                <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Before Image URL</label>
+                                <input type="text" placeholder="Before transformation image link"
                                     className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none"
-                                    value={testimonialData.transformationImage}
-                                    onChange={e => setTestimonialData({ ...testimonialData, transformationImage: e.target.value })}
-                                    required
+                                    value={testimonialData.beforeImage}
+                                    onChange={e => setTestimonialData({ ...testimonialData, beforeImage: e.target.value })}
+                                    required />
+                            </div>
+                            <div>
+                                <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">After Image URL</label>
+                                <input type="text" placeholder="After transformation image link"
+                                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none"
+                                    value={testimonialData.afterImage}
+                                    onChange={e => setTestimonialData({ ...testimonialData, afterImage: e.target.value })}
+                                    required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Coach Rating (1-5)</label>
+                                    <input type="number" min="1" max="5"
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none"
+                                        value={testimonialData.coachRating}
+                                        onChange={e => setTestimonialData({ ...testimonialData, coachRating: Number(e.target.value) || 5 })}
+                                        required />
+                                </div>
+                                <div>
+                                    <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Gym Rating (1-5)</label>
+                                    <input type="number" min="1" max="5"
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none"
+                                        value={testimonialData.gymRating}
+                                        onChange={e => setTestimonialData({ ...testimonialData, gymRating: Number(e.target.value) || 5 })}
+                                        required />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Coach Review</label>
+                                <textarea
+                                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none h-20 resize-none"
+                                    value={testimonialData.coachReview}
+                                    onChange={e => setTestimonialData({ ...testimonialData, coachReview: e.target.value })}
                                 />
-                                <p className="text-[10px] text-gray-500 mt-1 italic">Use Unsplash or a direct image link for best results.</p>
+                            </div>
+                            <div>
+                                <label className="text-gray-400 text-xs mb-1 block uppercase font-bold tracking-widest">Gym Review</label>
+                                <textarea
+                                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary outline-none h-20 resize-none"
+                                    value={testimonialData.gymReview}
+                                    onChange={e => setTestimonialData({ ...testimonialData, gymReview: e.target.value })}
+                                />
                             </div>
 
-                            <div className="flex gap-4 mt-8">
-                                <button type="button" onClick={() => setShowTestimonialModal(false)} className="flex-1 py-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 font-bold">Cancel</button>
-                                <button type="submit" className="flex-1 py-4 bg-primary text-black font-black rounded-2xl hover:scale-[1.02] transition-transform">SUBMIT JOURNEY</button>
+                            <div className="sticky bottom-0 bg-surface pt-4 pb-1">
+                                <div className="flex gap-4">
+                                    <button type="button" onClick={() => setShowTestimonialModal(false)} className="flex-1 py-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 font-bold">Cancel</button>
+                                    <button type="submit" className="flex-1 py-4 bg-primary text-black font-black rounded-2xl hover:scale-[1.02] transition-transform">SUBMIT JOURNEY</button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -226,50 +307,32 @@ const MemberDashboard = ({ user }) => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                        {
-                            name: "Sarah Jenkins",
-                            role: "Lost 22kg",
-                            story: "The AI meal plans were a game changer. I never felt restricted but the results were undeniable.",
-                            image: "https://images.unsplash.com/photo-1548690312-e3b507d17a4d?w=400&q=80",
-                            tag: "Weight Loss"
-                        },
-                        {
-                            name: "Marcus Thorne",
-                            role: "Muscle Gain +15kg",
-                            story: "FMS coaches pushed me beyond my limits. The tracking clarity kept me motivated every single day.",
-                            image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=80",
-                            tag: "Muscle Build"
-                        },
-                        {
-                            name: "Elena Rodriguez",
-                            role: "Marathon Finisher",
-                            story: "From struggling to run 5k to finishing my first marathon. FMS provided the structure I lacked.",
-                            image: "https://images.unsplash.com/photo-1486739985386-d4fae04ca6f7?w=400&q=80",
-                            tag: "Athletic"
-                        }
-                    ].map((t, i) => (
-                        <div key={i} className="glass-card group overflow-hidden flex flex-col hover:border-primary/30 transition-all border border-white/5">
-                            <div className="h-32 relative overflow-hidden">
-                                <img src={t.image} alt={t.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100" />
-                                <div className="absolute top-2 left-2">
-                                    <span className="bg-primary text-black text-[8px] font-black uppercase px-2 py-0.5 rounded shadow-lg">
-                                        {t.tag}
-                                    </span>
-                                </div>
+                    {publicStories.map((t) => (
+                        <div key={t._id} className="glass-card group overflow-hidden flex flex-col hover:border-primary/30 transition-all border border-white/5">
+                            <div className="h-32 grid grid-cols-2">
+                                <img src={t.beforeImage} alt="Before" className="w-full h-full object-cover" />
+                                <img src={t.afterImage} alt="After" className="w-full h-full object-cover" />
                             </div>
                             <div className="p-4 space-y-2 bg-black/40">
                                 <div>
-                                    <h4 className="text-white font-bold text-sm">{t.name}</h4>
-                                    <p className="text-[10px] text-primary font-medium">{t.role}</p>
+                                    <h4 className="text-white font-bold text-sm">{t.member?.name || 'Member'}</h4>
+                                    <p className="text-[10px] text-primary font-medium">{t.achievement}</p>
                                 </div>
-                                <p className="text-gray-400 text-xs italic leading-relaxed">"{t.story}"</p>
-                                <div className="pt-1 flex gap-0.5">
-                                    {[1, 2, 3, 4, 5].map(s => <Star key={s} size={10} className="text-primary" fill="currentColor" />)}
+                                <p className="text-gray-400 text-xs italic leading-relaxed">"{t.content}"</p>
+                                <p className="text-[10px] text-gray-500">Coach: {t.coach?.name || 'N/A'} • Gym: {t.gym?.name || 'N/A'}</p>
+                                <p className={`text-[10px] font-bold ${t.status === 'approved' ? 'text-emerald-400' : t.status === 'pending' ? 'text-amber-400' : 'text-red-400'}`}>
+                                    Status: {(t.status || 'approved').toUpperCase()}
+                                </p>
+                                <div className="pt-1 flex gap-2 text-[10px] text-yellow-400">
+                                    <span>Coach ★ {t.coachRating || 0}</span>
+                                    <span>Gym ★ {t.gymRating || 0}</span>
                                 </div>
                             </div>
                         </div>
                     ))}
+                    {publicStories.length === 0 && (
+                        <div className="col-span-full text-center text-gray-500 text-sm py-8">No success stories yet. Submit yours using "Share Your Progress".</div>
+                    )}
                 </div>
             </div>
 
@@ -330,7 +393,7 @@ const MemberDashboard = ({ user }) => {
                     <div>
                         <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2"><Trophy className="text-primary" /> Elite Coaches</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {coaches.length > 0 ? coaches.map((coach, i) => (
+                            {coaches.length > 0 ? coaches.map((coach) => (
                                 <div key={coach._id} className="glass-card p-4 flex items-center gap-4">
                                     <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/50 bg-gray-800 flex items-center justify-center">
                                         {coach.profilePic ? (

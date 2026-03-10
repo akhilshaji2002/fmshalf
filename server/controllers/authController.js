@@ -27,6 +27,8 @@ exports.registerUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                currentGym: user.currentGym || null,
+                affiliations: user.affiliations || [],
                 mobileNumber: user.mobileNumber,
                 profilePic: user.profilePic,
                 experience: user.experience,
@@ -59,6 +61,8 @@ exports.loginUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                currentGym: user.currentGym || null,
+                affiliations: user.affiliations || [],
                 profilePic: user.profilePic,
                 experience: user.experience,
                 specializations: user.specializations,
@@ -86,6 +90,9 @@ exports.getProfile = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                currentGym: user.currentGym || null,
+                affiliations: user.affiliations || [],
+                subscription: user.subscription || { status: 'none' },
                 generatedImages: user.generatedImages || []
             });
         } else {

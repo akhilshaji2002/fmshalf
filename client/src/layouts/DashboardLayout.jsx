@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Activity, ShoppingBag, ShieldCheck, Dumbbell, LogOut, Settings, UserCheck, Calendar, Trophy, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, ShoppingBag, ShieldCheck, Dumbbell, LogOut, Settings, UserCheck, Calendar, Trophy, Sparkles, ScanEye, Building2, MessageCircle, Flame } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-const SidebarItem = ({ to, icon: Icon, label }) => (
+const SidebarItem = ({ to, icon, label }) => {
+    const IconComponent = icon;
+    return (
     <NavLink
         to={to}
         className={({ isActive }) =>
@@ -13,10 +16,11 @@ const SidebarItem = ({ to, icon: Icon, label }) => (
             }`
         }
     >
-        <Icon size={20} className="transition-transform group-hover:scale-110" />
+        <IconComponent size={20} className="transition-transform group-hover:scale-110" />
         <span className="font-medium tracking-wide">{label}</span>
     </NavLink>
-);
+    );
+};
 
 const DashboardLayout = () => {
     const navigate = useNavigate();
@@ -30,6 +34,29 @@ const DashboardLayout = () => {
             setUser(JSON.parse(stored));
         }
     }, [navigate]);
+
+    useEffect(() => {
+        if (!user?.token || user.role !== 'member') return;
+        const loadProfile = async () => {
+            try {
+                const res = await fetch('http://localhost:5000/api/auth/profile', {
+                    headers: { Authorization: `Bearer ${user.token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const expiresAt = data?.subscription?.expiresAt;
+                const status = data?.subscription?.status;
+                if (!expiresAt || status !== 'active') return;
+                const msLeft = new Date(expiresAt).getTime() - Date.now();
+                if (msLeft <= 24 * 60 * 60 * 1000) {
+                    toast.error('⚠️ Subscription renewal due within 1 day.');
+                }
+            } catch {
+                // silent
+            }
+        };
+        loadProfile();
+    }, [user]);
 
     const handleLogout = () => {
         localStorage.removeItem('userInfo');
@@ -59,8 +86,18 @@ const DashboardLayout = () => {
                 </div>
 
                 <nav className="flex-1 space-y-2 z-10 overflow-y-auto pr-2 custom-scrollbar">
-                    <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" />
-                    <SidebarItem to="/ai-progress" icon={Sparkles} label="AI Progress" />
+                    {user.role === 'gymOwner' ? (
+                        <>
+                            <SidebarItem to="/gym-owner" icon={Building2} label="Gym Management" />
+                            <SidebarItem to="/chat" icon={MessageCircle} label="Community Chat" />
+                            <SidebarItem to="/settings" icon={Settings} label="Settings" />
+                        </>
+                    ) : (
+                        <>
+                            <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" />
+                            <SidebarItem to="/chat" icon={MessageCircle} label="Community Chat" />
+                            <SidebarItem to="/ai-progress" icon={Sparkles} label="AI Progress" />
+                            <SidebarItem to="/food-vision" icon={ScanEye} label="Food Vision" />
 
                     {/* Staff Only Links (Admin + Trainer) */}
                     {isStaff && (
@@ -71,6 +108,10 @@ const DashboardLayout = () => {
                     )}
 
                     <SidebarItem to="/training" icon={Activity} label={isStaff ? "Trainer Studio" : "My Plan"} />
+                    {(user.role === 'member' || user.role === 'trainer') && (
+                        <SidebarItem to="/your-gym" icon={Building2} label="Your Gym" />
+                    )}
+                    <SidebarItem to="/kinetix" icon={Flame} label="Workouts" />
                     <SidebarItem to="/sessions" icon={Calendar} label={isStaff ? "Client Sessions" : "My Sessions"} />
                     <SidebarItem to="/coaches" icon={UserCheck} label="Coaches" />
 
@@ -88,7 +129,8 @@ const DashboardLayout = () => {
 
                     <div className="my-4 border-t border-white/10 mx-4"></div>
                     <SidebarItem to="/settings" icon={Settings} label="Settings" />
-
+                    </>
+                    )}
                 </nav>
 
                 <div className="mt-auto relative z-10">
@@ -116,9 +158,9 @@ const DashboardLayout = () => {
 
             {/* Main Content */}
             <main className="flex-1 p-4 overflow-hidden flex flex-col">
-                <div className="h-full glass rounded-3xl overflow-auto relative">
+                <div className="h-full glass rounded-3xl overflow-hidden relative flex flex-col">
                     <div className="absolute top-0 right-0 w-96 h-96 bg-secondary/10 rounded-full blur-[100px] pointer-events-none" />
-                    <div className="p-8 relative z-10">
+                    <div className="flex-1 p-8 relative z-10 overflow-auto peer-[.chat-page]:p-0">
                         <Outlet />
                     </div>
                 </div>

@@ -16,10 +16,11 @@ const PaymentGateway = () => {
 
     const userStr = localStorage.getItem('userInfo');
     const userInfo = userStr ? JSON.parse(userStr) : null;
+    const isDemoMembershipFlow = Boolean(state?.membership);
 
     useEffect(() => {
         if (!state?.sessionId) {
-            navigate('/shop');
+            navigate('/discovery');
         }
     }, [state, navigate]);
 
@@ -28,14 +29,55 @@ const PaymentGateway = () => {
     }
 
     const handlePayment = async () => {
-        if (method === 'upi' && !upiId.includes('@')) return toast.error('Enter valid UPI ID');
-        if (method === 'card' && cardData.number.length < 16) return toast.error('Enter valid Card details');
+        const upiValid = /^[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}$/i.test((upiId || '').trim());
+        const cardValid = /^\d{16}$/.test((cardData.number || '').replace(/\s+/g, '')) && /^\d{3}$/.test((cardData.cvv || '').trim());
+        if (method === 'upi' && !upiValid) return toast.error('Enter valid UPI ID');
+        if (method === 'card' && !cardValid) return toast.error('Enter valid Card details');
 
         setProcessing(true);
 
         // Simulate Gateway Latency
         setTimeout(async () => {
             try {
+                // Demo-first membership flow: attempt verify, but still allow successful join if verify is flaky.
+                if (isDemoMembershipFlow) {
+                    await fetch('http://localhost:5000/api/finance/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${userInfo?.token}`
+                        },
+                        body: JSON.stringify({
+                            sessionId: state.sessionId,
+                            paymentMethod: method,
+                            transactionId: `DEMO_TXN_${Math.random().toString(36).substring(2, 10).toUpperCase()}`
+                        })
+                    });
+
+                    if (state?.gymId) {
+                        await fetch(`http://localhost:5000/api/gyms/${state.gymId}/join`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${userInfo?.token}`
+                            }
+                        });
+                    }
+
+                    const profileRes = await fetch('http://localhost:5000/api/auth/profile', {
+                        headers: { Authorization: `Bearer ${userInfo?.token}` }
+                    });
+                    if (profileRes.ok) {
+                        const profile = await profileRes.json();
+                        const updated = { ...userInfo, currentGym: profile.currentGym, subscription: profile.subscription, affiliations: profile.affiliations };
+                        localStorage.setItem('userInfo', JSON.stringify(updated));
+                    }
+                    setSuccess(true);
+                    setProcessing(false);
+                    toast.success('Demo payment successful. Gym membership activated!');
+                    return;
+                }
+
                 const res = await fetch('http://localhost:5000/api/finance/verify', {
                     method: 'POST',
                     headers: {
@@ -45,18 +87,18 @@ const PaymentGateway = () => {
                     body: JSON.stringify({
                         sessionId: state.sessionId,
                         paymentMethod: method,
-                        transactionId: `FMS_TXN_${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+                        transactionId: `FMS_TXN_${Math.random().toString(36).substring(2, 10).toUpperCase()}`
                     })
                 });
 
-                if (res.ok) {
-                    setSuccess(true);
-                    setProcessing(false);
-                    toast.success('Payment Successful!');
-                } else {
+                if (!res.ok) {
                     toast.error('Payment Failed at Gateway');
                     setProcessing(false);
+                    return;
                 }
+                setSuccess(true);
+                setProcessing(false);
+                toast.success('Payment Successful!');
             } catch (err) {
                 toast.error('Gateway Connection Error');
                 setProcessing(false);
@@ -83,11 +125,11 @@ const PaymentGateway = () => {
                         </div>
                         <div className="flex justify-between text-xs text-gray-500 font-mono">
                             <span>TOTAL PAID</span>
-                            <span className="text-white">${state.amount}</span>
+                            <span className="text-white">₹{Number(state.amount || 0).toLocaleString('en-IN')}</span>
                         </div>
                     </div>
-                    <button onClick={() => navigate('/shop')} className="px-12 py-4 bg-primary text-black font-bold rounded-2xl hover:scale-105 transition-transform">
-                        Back to Shop
+                    <button onClick={() => navigate(state?.membership ? '/coaches' : '/shop')} className="px-12 py-4 bg-primary text-black font-bold rounded-2xl hover:scale-105 transition-transform">
+                        {state?.membership ? 'View Trainers' : 'Back to Shop'}
                     </button>
                 </div>
             </div>
@@ -111,7 +153,7 @@ const PaymentGateway = () => {
                 <div className="bg-primary p-6 flex justify-between items-center">
                     <div>
                         <p className="text-[10px] text-black/60 font-bold uppercase">Order Amount</p>
-                        <h2 className="text-3xl font-black text-black">${state.amount}</h2>
+                        <h2 className="text-3xl font-black text-black">₹{Number(state.amount || 0).toLocaleString('en-IN')}</h2>
                     </div>
                     <div className="text-right">
                         <p className="text-[10px] text-black/60 font-bold uppercase">FMS Merchant</p>
@@ -209,7 +251,7 @@ const PaymentGateway = () => {
                             </>
                         ) : (
                             <>
-                                PAY ${state.amount} NOW
+                                PAY ₹{Number(state.amount || 0).toLocaleString('en-IN')} NOW
                             </>
                         )}
                     </button>

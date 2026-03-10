@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Trash2, Search, User, Mail, Calendar, Eye } from 'lucide-react';
 import { getSafeUser } from '../utils/auth';
 import MemberProfileModal from '../components/MemberProfileModal';
@@ -10,16 +10,16 @@ const Members = () => {
     const [newMember, setNewMember] = useState({ name: '', email: '' });
     const [selectedMemberId, setSelectedMemberId] = useState(null);
 
-    const getHeaders = () => {
+    const getHeaders = useCallback(() => {
         const user = getSafeUser();
         const token = user?.token;
         return {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
         };
-    };
+    }, []);
 
-    const fetchMembers = async () => {
+    const fetchMembers = useCallback(async () => {
         try {
             const res = await fetch('http://localhost:5000/api/members', {
                 headers: getHeaders()
@@ -31,11 +31,11 @@ const Members = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [getHeaders]);
 
     useEffect(() => {
         fetchMembers();
-    }, []);
+    }, [fetchMembers]);
 
     const handleAdd = async (e) => {
         e.preventDefault();

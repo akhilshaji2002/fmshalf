@@ -20,7 +20,7 @@ const MemberProfileModal = ({ memberId, onClose }) => {
                 } else {
                     toast.error(result.message || 'Failed to load profile');
                 }
-            } catch (err) {
+            } catch {
                 toast.error('Connection error');
             } finally {
                 setLoading(false);

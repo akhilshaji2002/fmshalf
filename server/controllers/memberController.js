@@ -10,7 +10,18 @@ exports.getMembers = async (req, res) => {
             selectFields += ' -mobileNumber';
         }
 
-        const members = await User.find({ role: 'member' })
+        const query = { role: 'member' };
+        if (req.user?.role === 'trainer' || req.user?.role === 'gymOwner') {
+            if (!req.user.currentGym) {
+                return res.json([]);
+            }
+            query.currentGym = req.user.currentGym;
+        }
+        if (req.user?.role === 'member') {
+            query._id = req.user._id;
+        }
+
+        const members = await User.find(query)
             .select(selectFields)
             .sort({ joinedAt: -1 });
         res.json(members);
@@ -23,12 +34,14 @@ exports.getMembers = async (req, res) => {
 exports.addMember = async (req, res) => {
     try {
         const { name, email, role, ...otherData } = req.body;
+        const currentGym = req.user?.currentGym;
         // Default password for new members added by Admin
         const user = new User({
             name,
             email,
             role: role || 'member',
             password: 'password123', // Default password
+            currentGym: currentGym || otherData.currentGym,
             ...otherData
         });
         await user.save();

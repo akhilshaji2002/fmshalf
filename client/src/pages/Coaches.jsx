@@ -1,9 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { User, Plus, Trash2, Calendar, Star, Trophy } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
 const Coaches = () => {
+    const location = useLocation();
+    const scope = new URLSearchParams(location.search).get('scope');
+    const gymOnlyScope = scope === 'gym';
     const [coaches, setCoaches] = useState([]);
+    const [coachSummaries, setCoachSummaries] = useState({});
     const [showAddModal, setShowAddModal] = useState(false);
     const [newCoach, setNewCoach] = useState({
         name: '',
@@ -19,28 +24,40 @@ const Coaches = () => {
     const [trainingType, setTrainingType] = useState('gym');
     const [showTestimonialModal, setShowTestimonialModal] = useState(false);
     const [activeTestimonials, setActiveTestimonials] = useState([]);
-    const [loadingTestimonials, setLoadingTestimonials] = useState(false);
     const [bookingDate, setBookingDate] = useState('');
     const userStr = localStorage.getItem('userInfo');
     const user = userStr ? JSON.parse(userStr) : null;
     const isStaff = user?.role === 'admin';
 
-    const fetchCoaches = async () => {
+    const fetchCoaches = useCallback(async () => {
         const token = user?.token;
         try {
-            const res = await fetch('http://localhost:5000/api/trainers', {
+            const res = await fetch('http://localhost:5000/api/trainers?trainingType=online', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
-            setCoaches(Array.isArray(data) ? data : []);
+            const list = Array.isArray(data) ? data : [];
+            setCoaches(gymOnlyScope ? list.filter((c) => c.canInGymBooking) : list);
+            const summaries = await Promise.all(
+                (gymOnlyScope ? list.filter((c) => c.canInGymBooking) : list).map(async (c) => {
+                    try {
+                        const sRes = await fetch(`http://localhost:5000/api/testimonials/coach/${c._id}/summary`);
+                        const s = await sRes.json();
+                        return [c._id, s];
+                    } catch {
+                        return [c._id, { average: 0, count: 0 }];
+                    }
+                })
+            );
+            setCoachSummaries(Object.fromEntries(summaries));
         } catch (err) {
             console.error(err);
         }
-    };
+    }, [user?.token, gymOnlyScope]);
 
     useEffect(() => {
         fetchCoaches();
-    }, []);
+    }, [fetchCoaches]);
 
     const handleBook = async () => {
         if (!selectedCoach) {
@@ -52,6 +69,10 @@ const Coaches = () => {
             return;
         }
         const token = user?.token;
+        if (trainingType !== 'online' && selectedCoach && !selectedCoach.canInGymBooking) {
+            toast.error('This coach is from another gym. Join their gym or choose online.');
+            return;
+        }
 
         try {
             const res = await fetch('http://localhost:5000/api/bookings', {
@@ -130,7 +151,6 @@ const Coaches = () => {
     };
 
     const fetchCoachTestimonials = async (coachId) => {
-        setLoadingTestimonials(true);
         try {
             const res = await fetch(`http://localhost:5000/api/testimonials/coach/${coachId}`);
             const data = await res.json();
@@ -139,8 +159,6 @@ const Coaches = () => {
         } catch (err) {
             console.error(err);
             toast.error('Failed to load stories');
-        } finally {
-            setLoadingTestimonials(false);
         }
     };
 
@@ -149,7 +167,13 @@ const Coaches = () => {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold text-white mb-2">Our Elite Coaches</h1>
-                    <p className="text-gray-400">Expert guidance to help you reach your peak.</p>
+                    <p className="text-gray-400">
+                        {gymOnlyScope
+                            ? 'Gym-only mode from Your Gym: listing coaches registered under your active gym.'
+                            : trainingType === 'online'
+                                ? 'Online mode: coaches across gyms are available.'
+                                : 'Gym/Home mode: only coaches from your selected gym are shown.'}
+                    </p>
                 </div>
                 {isStaff && (
                     <button onClick={() => setShowAddModal(true)} className="bg-primary text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-primary/80">
@@ -182,12 +206,20 @@ const Coaches = () => {
                         <div className="text-sm text-gray-400 mb-4 line-clamp-2 px-2">
                             {coach.bio || "No bio available."}
                         </div>
+                        {!coach.canInGymBooking && (
+                            <div className="mb-4 text-[11px] text-amber-300 border border-amber-500/40 bg-amber-500/10 rounded-lg px-2 py-1">
+                                Different gym: available for online coaching only.
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-4 text-xs text-gray-500 mb-6">
                             <span>{coach.experience} Years Exp</span>
                             <div className="flex gap-0.5 text-yellow-500">
                                 {[1, 2, 3, 4, 5].map(i => <Star key={i} size={10} fill="currentColor" />)}
                             </div>
+                        </div>
+                        <div className="mb-4 text-[11px] text-yellow-400">
+                            Coach Rating: ★ {Number(coachSummaries[coach._id]?.average || 0).toFixed(1)} ({coachSummaries[coach._id]?.count || 0} reviews)
                         </div>
 
                         {isStaff && coach.nationalId?.idNumber && (
@@ -314,12 +346,22 @@ const Coaches = () => {
                                 <label className="text-gray-400 text-sm mb-2 block">Training Location</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {['gym', 'home', 'online'].map(type => (
-                                        <button key={type} onClick={() => setTrainingType(type)}
-                                            className={`py-2 text-xs rounded-lg border transition-all capitalize ${trainingType === type ? 'bg-primary border-primary text-black font-bold' : 'bg-black/50 border-white/10 text-gray-400'}`}>
+                                        <button
+                                            key={type}
+                                            onClick={() => setTrainingType(type)}
+                                            disabled={(gymOnlyScope && type === 'online') || (!selectedCoach?.canInGymBooking && type !== 'online')}
+                                            className={`py-2 text-xs rounded-lg border transition-all capitalize ${trainingType === type ? 'bg-primary border-primary text-black font-bold' : 'bg-black/50 border-white/10 text-gray-400'} ${!selectedCoach?.canInGymBooking && type !== 'online' ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                        >
                                             {type}
                                         </button>
                                     ))}
                                 </div>
+                                {gymOnlyScope && (
+                                    <p className="text-[11px] text-emerald-300 mt-2">Gym-only mode active.</p>
+                                )}
+                                {!gymOnlyScope && !selectedCoach?.canInGymBooking && (
+                                    <p className="text-[11px] text-amber-300 mt-2">Join this coach's gym to unlock gym/home sessions.</p>
+                                )}
                             </div>
                             <div className="flex gap-4 mt-8">
                                 <button onClick={() => setShowBookingModal(false)} className="flex-1 py-3 bg-white/5 text-white rounded-xl hover:bg-white/10">Cancel</button>
@@ -348,8 +390,9 @@ const Coaches = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     {activeTestimonials.map(t => (
                                         <div key={t._id} className="glass-card overflow-hidden flex flex-col border-white/5 bg-white/5">
-                                            <div className="h-64 relative overflow-hidden">
-                                                <img src={t.transformationImage} alt="Success" className="w-full h-full object-cover" />
+                                            <div className="h-64 relative overflow-hidden grid grid-cols-2">
+                                                <img src={t.beforeImage || t.transformationImage} alt="Before" className="w-full h-full object-cover" />
+                                                <img src={t.afterImage || t.transformationImage} alt="After" className="w-full h-full object-cover" />
                                                 <div className="absolute top-4 left-4 bg-primary text-black text-[10px] font-black px-2 py-1 rounded">
                                                     {t.achievement}
                                                 </div>
@@ -363,6 +406,9 @@ const Coaches = () => {
                                                     </div>
                                                 </div>
                                                 <p className="text-gray-400 text-sm italic leading-relaxed">"{t.content}"</p>
+                                                <p className="text-[11px] text-yellow-400">Coach ★ {t.coachRating || 0} • Gym ★ {t.gymRating || 0}</p>
+                                                {t.coachReview && <p className="text-[11px] text-gray-300">Coach Review: {t.coachReview}</p>}
+                                                {t.gymReview && <p className="text-[11px] text-gray-300">Gym Review: {t.gymReview}</p>}
                                                 <div className="flex gap-1">
                                                     {[1, 2, 3, 4, 5].map(s => <Star key={s} size={12} className="text-primary" fill="currentColor" />)}
                                                 </div>

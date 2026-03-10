@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Dumbbell, ArrowRight, AlertTriangle, Star, Trophy } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Dumbbell, ArrowRight, AlertTriangle, Star, Trophy, CheckCircle } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Login = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -14,29 +14,93 @@ const Login = () => {
         nationalId: { idType: 'aadhar', idNumber: '' },
         experience: '0',
         specializations: [],
-        bio: ''
+        bio: '',
+        memberProfile: {
+            fitnessGoal: 'general_fitness',
+            workoutPreference: 'gym',
+            medicalNotes: ''
+        },
+        trainerProfile: {
+            certifications: '',
+            hourlyRateInr: '',
+            availableModes: ['gym'],
+            languages: '',
+            achievements: '',
+            workingHours: { from: '06:00', to: '20:00' }
+        }
     });
     const [error, setError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        // Check if redirected from successful gym registration
+        const params = new URLSearchParams(location.search);
+        if (params.get('registered') === 'gym') {
+            setSuccessMsg('Gym registered successfully! Please log in to access your dashboard.');
+            setIsLogin(true); // Force login view
+        }
+    }, [location]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccessMsg('');
         setLoading(true);
         const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+        const payload = !isLogin ? {
+            ...formData,
+            trainerProfile: {
+                ...formData.trainerProfile,
+                certifications: String(formData.trainerProfile.certifications || '')
+                    .split(',')
+                    .map((x) => x.trim())
+                    .filter(Boolean),
+                languages: String(formData.trainerProfile.languages || '')
+                    .split(',')
+                    .map((x) => x.trim())
+                    .filter(Boolean),
+                hourlyRateInr: Number(formData.trainerProfile.hourlyRateInr || 0)
+            }
+        } : formData;
 
         try {
             const res = await fetch(`http://localhost:5000${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
 
             if (res.ok) {
                 localStorage.setItem('userInfo', JSON.stringify(data));
-                navigate('/');
+                if (data?.token) {
+                    localStorage.setItem('token', data.token);
+                }
+                // Keep a user object for modules that read `user`
+                localStorage.setItem('user', JSON.stringify({
+                    _id: data._id,
+                    name: data.name,
+                    email: data.email,
+                    role: data.role,
+                    profilePic: data.profilePic || '',
+                    token: data.token
+                }));
+                if (data.role === 'gymOwner') {
+                    navigate('/gym-owner');
+                } else {
+                    const hasGym = Boolean(data.currentGym);
+                    if (!hasGym) {
+                        navigate('/discovery');
+                    } else if (!isLogin) {
+                        navigate('/discovery');
+                    } else {
+                        navigate('/');
+                    }
+                }
+                
                 window.location.reload();
             } else {
                 setError(data.message || 'Authentication failed');
@@ -75,16 +139,27 @@ const Login = () => {
                         </div>
                     )}
 
+                    {successMsg && (
+                        <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3 text-green-500 text-sm">
+                            <CheckCircle size={18} />
+                            {successMsg}
+                        </div>
+                    )}
+
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {!isLogin && (
-                            <div className="flex gap-4 p-1 bg-white/5 rounded-xl mb-6">
+                            <div className="flex gap-2 p-1 bg-white/5 rounded-xl mb-6 flex-wrap">
                                 <button type="button" onClick={() => setFormData({ ...formData, role: 'member' })}
-                                    className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-colors ${formData.role === 'member' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}>
-                                    REGULAR MEMBER
+                                    className={`flex-1 py-2 px-1 text-[9px] sm:text-[10px] font-bold rounded-lg transition-colors ${formData.role === 'member' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}>
+                                    MEMBER
                                 </button>
                                 <button type="button" onClick={() => setFormData({ ...formData, role: 'trainer' })}
-                                    className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-colors ${formData.role === 'trainer' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}>
-                                    COACH / TRAINER
+                                    className={`flex-1 py-2 px-1 text-[9px] sm:text-[10px] font-bold rounded-lg transition-colors ${formData.role === 'trainer' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}>
+                                    COACH
+                                </button>
+                                <button type="button" onClick={() => setFormData({ ...formData, role: 'gymOwner' })}
+                                    className={`flex-1 py-2 px-1 text-[9px] sm:text-[10px] font-bold rounded-lg transition-colors ${formData.role === 'gymOwner' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}>
+                                    GYM OWNER
                                 </button>
                             </div>
                         )}
@@ -156,9 +231,63 @@ const Login = () => {
                             </div>
                         )}
 
+                        {/* Member-specific onboarding */}
+                        {!isLogin && formData.role === 'member' && (
+                            <div className="space-y-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2">
+                                <p className="text-[11px] text-gray-400 uppercase tracking-wider">Member Preferences</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Primary Goal</label>
+                                        <select
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.memberProfile.fitnessGoal}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                memberProfile: { ...formData.memberProfile, fitnessGoal: e.target.value }
+                                            })}
+                                        >
+                                            <option value="general_fitness">General Fitness</option>
+                                            <option value="fat_loss">Fat Loss</option>
+                                            <option value="muscle_gain">Muscle Gain</option>
+                                            <option value="strength">Strength</option>
+                                            <option value="endurance">Endurance</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Workout Preference</label>
+                                        <select
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.memberProfile.workoutPreference}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                memberProfile: { ...formData.memberProfile, workoutPreference: e.target.value }
+                                            })}
+                                        >
+                                            <option value="gym">Gym</option>
+                                            <option value="home">Home</option>
+                                            <option value="online">Online</option>
+                                            <option value="hybrid">Hybrid</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-500 uppercase ml-1">Medical Notes (Optional)</label>
+                                    <textarea
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none h-20 resize-none"
+                                        value={formData.memberProfile.medicalNotes}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            memberProfile: { ...formData.memberProfile, medicalNotes: e.target.value }
+                                        })}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* Coach Specific Fields */}
                         {!isLogin && formData.role === 'trainer' && (
                             <div className="space-y-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2">
+                                <p className="text-[11px] text-gray-400 uppercase tracking-wider">Coach Professional Details</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-[10px] text-gray-500 uppercase ml-1">Experience (Years)</label>
@@ -181,6 +310,111 @@ const Login = () => {
                                             <option value="Yoga">Yoga</option>
                                         </select>
                                     </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Hourly Rate (INR)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.trainerProfile.hourlyRateInr}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                trainerProfile: { ...formData.trainerProfile, hourlyRateInr: e.target.value }
+                                            })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Available Modes</label>
+                                        <select
+                                            multiple
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2 text-xs text-white focus:border-primary outline-none h-20"
+                                            value={formData.trainerProfile.availableModes}
+                                            onChange={e => {
+                                                const values = Array.from(e.target.selectedOptions, option => option.value);
+                                                setFormData({
+                                                    ...formData,
+                                                    trainerProfile: { ...formData.trainerProfile, availableModes: values }
+                                                });
+                                            }}
+                                        >
+                                            <option value="gym">Gym</option>
+                                            <option value="home">Home Visit</option>
+                                            <option value="online">Online</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Certifications (comma separated)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="ACE, NSCA-CPT"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.trainerProfile.certifications}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                trainerProfile: { ...formData.trainerProfile, certifications: e.target.value }
+                                            })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Languages (comma separated)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="English, Hindi"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.trainerProfile.languages}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                trainerProfile: { ...formData.trainerProfile, languages: e.target.value }
+                                            })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Working Hours From</label>
+                                        <input
+                                            type="time"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.trainerProfile.workingHours.from}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                trainerProfile: {
+                                                    ...formData.trainerProfile,
+                                                    workingHours: { ...formData.trainerProfile.workingHours, from: e.target.value }
+                                                }
+                                            })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-500 uppercase ml-1">Working Hours To</label>
+                                        <input
+                                            type="time"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none"
+                                            value={formData.trainerProfile.workingHours.to}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                trainerProfile: {
+                                                    ...formData.trainerProfile,
+                                                    workingHours: { ...formData.trainerProfile.workingHours, to: e.target.value }
+                                                }
+                                            })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-500 uppercase ml-1">Achievements / Profile Summary</label>
+                                    <textarea
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-primary outline-none h-20 resize-none"
+                                        value={formData.trainerProfile.achievements}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            trainerProfile: { ...formData.trainerProfile, achievements: e.target.value }
+                                        })}
+                                    />
                                 </div>
                             </div>
                         )}

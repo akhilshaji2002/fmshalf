@@ -15,7 +15,11 @@ exports.getProducts = async (req, res) => {
 // Add Product
 exports.addProduct = async (req, res) => {
     try {
-        const product = new Product(req.body);
+        const payload = { ...req.body };
+        if (!payload.sku || !String(payload.sku).trim()) {
+            payload.sku = `SKU-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        }
+        const product = new Product(payload);
         await product.save();
         res.status(201).json(product);
     } catch (error) {

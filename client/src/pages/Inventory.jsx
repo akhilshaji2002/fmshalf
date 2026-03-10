@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 const Inventory = () => {
     const [products, setProducts] = useState([]);
     const [cart, setCart] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [newProduct, setNewProduct] = useState({ name: '', price: '', category: 'supplement', stock: '', sku: '', image: '' });
@@ -24,8 +23,6 @@ const Inventory = () => {
         } catch (err) {
             console.error(err);
             toast.error('Failed to load inventory');
-        } finally {
-            setLoading(false);
         }
     };
 

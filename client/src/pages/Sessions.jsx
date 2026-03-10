@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Calendar, Clock, MapPin, CheckCircle2, XCircle, MoreVertical, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSafeUser } from '../utils/auth';
@@ -12,7 +12,7 @@ const Sessions = () => {
     const isAdmin = user?.role === 'admin';
     const [selectedMember, setSelectedMember] = useState(null);
 
-    const fetchBookings = async () => {
+    const fetchBookings = useCallback(async () => {
         if (!user?.token) {
             setLoading(false);
             return;
@@ -28,11 +28,11 @@ const Sessions = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user?.token]);
 
     useEffect(() => {
         fetchBookings();
-    }, []);
+    }, [fetchBookings]);
 
     const getStatusColor = (status) => {
         switch (status) {
