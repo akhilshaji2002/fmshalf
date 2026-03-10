@@ -1,2 +1,2 @@
 # FMS
-fitness management system
+Fitness Management System full-stack platform.
